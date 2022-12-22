@@ -31,6 +31,7 @@ import uuid
 import tempfile
 import re
 from email.parser import HeaderParser
+from msal import ConfidentialClientApplication
 
 log = ''
 
@@ -54,8 +55,12 @@ args = ''
 config = {
     'imapHost'           : '',
     'imapPort'           : 993,
+    'imapTenantID'       : '',
+    'imapClientID'       : '',
+    'imapClientSecret'   : '',
+    'imapScope'          : [],
+    'imapAuthority'      : '',
     'imapUser'           : '',
-    'imapPassword'       : '',
     'imapFolder'         : '',
     'imapExpunge'        : False,
     'imapSpam'           : '',
@@ -153,6 +158,16 @@ def searchObservables(buffer, observables):
             observables.append({ 'type': o['type'], 'value': match })
     return observables
 
+def refreshAccessToken():
+    app = ConfidentialClientApplication(config['imapClientID'], authority=config['imapAuthority'], client_credential=config['imapClientSecret'])
+    accessToken = app.acquire_token_for_client(scopes=config['imapScope'])
+    
+    return accessToken
+
+def generateAuthString(user, token):
+    authString = f"user={user}\1auth=Bearer {token}\1\1"
+    return authString
+    
 def mailConnect():
     '''
     Connection to mailserver and handle the IMAP connection
@@ -167,9 +182,11 @@ def mailConnect():
         log.error("Cannot connect to IMAP server %s: %s" % (config['imapHost'],str(val)))
         mbox = None
         return
-
+    
+    accessToken = refreshAccessToken()
+    
     try:
-        typ,dat = mbox.login(config['imapUser'],config['imapPassword'])
+        typ,dat = mbox.authenticate("XOAUTH2", lambda x: generateAuthString(config['imapUser'], accessToken["access_token"]))
     except:
         typ,dat = sys.exc_info()[:2]
 
@@ -474,9 +491,13 @@ def main():
     # IMAP Config
     config['imapHost']          = c.get('imap', 'host')
     if c.has_option('imap', 'port'):
-        config['imapPort']          = int(c.get('imap', 'port'))
+        config['imapPort']      = int(c.get('imap', 'port'))
+    config['imapTenantID']      = c.get('imap', 'tenantID')
+    config['imapClientID']      = c.get('imap', 'clientID')
+    config['imapClientSecret']  = c.get('imap', 'clientSecret')
+    config['imapScope']         = c.get('imap', 'scope').split(',')
+    config['imapAuthority']     = c.get('imap', 'authority') + config['imapTenantID']
     config['imapUser']          = c.get('imap', 'user')
-    config['imapPassword']      = c.get('imap', 'password')
     config['imapFolder']        = c.get('imap', 'folder')
     if c.has_option('imap', 'expunge'):
         value = c.get('imap', 'expunge')
