@@ -563,7 +563,6 @@ def main():
     log.info('Processing %s@%s:%d/%s' % (config['imapUser'], config['imapHost'], config['imapPort'], config['imapFolder']))
 
     readMail(mailConnect())
-    return
 
 if __name__ == 'imap2thehive':
     main()
